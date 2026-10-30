@@ -1,0 +1,23 @@
+[project]
+name = "cswap-sync"
+version = "0.1.0"
+description = "Heal claude-swap logins on one machine from working copies on your other machines"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["cryptography>=42"]
+
+[project.scripts]
+cswap-sync = "cswap_sync.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cswap_sync"]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
