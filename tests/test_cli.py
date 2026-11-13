@@ -19,7 +19,7 @@ def machine(tmp_path, monkeypatch):
     store = tmp_path / "store"
     cdir_key = None
 
-    def make(name, entries, statuses=None, active=None, export_fails=False):
+    def make(name, entries, statuses=None, active=None, export_fails=False, settings=None):
         nonlocal cdir_key
         cdir = tmp_path / name
         if cdir_key is None:
@@ -31,7 +31,8 @@ def machine(tmp_path, monkeypatch):
             os.chmod(cdir / "key", 0o600)
         st = cdir / "cswap.json"
         st.write_text(json.dumps({"entries": entries, "statuses": statuses or {},
-                                  "active": active, "export_fails": export_fails}))
+                                  "active": active, "export_fails": export_fails,
+                                  "settings": settings or {}}))
         wrapper = cdir / "cswap"
         wrapper.write_text(f"#!/bin/sh\nFAKE_CSWAP_STATE={st} exec {sys.executable} {FAKE} \"$@\"\n")
         wrapper.chmod(0o755)
@@ -91,3 +92,15 @@ def test_a_failing_full_export_falls_back_to_slot_by_slot(machine, capsys):
     calls = mac.state()["calls"]
     assert ["export", "-", "--account", "1"] in calls
     assert "published 1 working login" in capsys.readouterr().out
+
+
+def test_a_repaired_disabled_slot_stays_out_of_rotation(machine, capsys):
+    mac = machine("laptop", [login("a@x", ORG_A, "rt-good", 1016 * H, number=6)])
+    vm = machine("vm1", [login("a@x", ORG_A, "rt-dead", 1000 * H, number=8)],
+                 statuses={"8": "relogin_required"}, settings={"8": {"disabled": True}})
+    assert mac("publish") == 0
+    assert vm("run") == 0
+    out = capsys.readouterr().out
+    assert "cswap: Replaced a@x" in out and "kept #8 disabled=True" in out
+    assert vm.state()["settings"]["8"] == {"disabled": True}
+    assert ["disable", "8"] in vm.state()["calls"]

@@ -108,3 +108,58 @@ def test_unreadable_or_misnamed_blobs_are_skipped(tmp_path, key):
     vm = FakeCswap([login("a@x", ORG_A, "rt-1", 1000 * H)])
     res = run_pass(vm, store, key, "vm1", {}, log=quiet)
     assert len(res.skipped) == 2 and res.actions == []
+
+
+SETTINGS = {"disabled": True, "threshold": 85.0, "alias": "pk"}
+
+
+def _dead_vm(**kw):
+    return FakeCswap([login("a@x", ORG_A, "rt-dead", 1000 * H, number=8)],
+                     statuses={8: kw.pop("status", "relogin_required")},
+                     settings={8: dict(SETTINGS)}, **kw)
+
+
+def _published(tmp_path, key):
+    store = DirStore(tmp_path)
+    run_pass(FakeCswap([login("a@x", ORG_A, "rt-good", 1016 * H, number=6)]),
+             store, key, "laptop", {}, log=quiet)
+    return store
+
+
+def test_a_repaired_slot_keeps_what_the_user_set_on_it(tmp_path, key):
+    store = _published(tmp_path, key)
+    vm, logs = _dead_vm(), []
+    run_pass(vm, store, key, "vm1", {}, log=logs.append)
+    assert vm.entries[0]["credentials"]["claudeAiOauth"]["refreshToken"] == "rt-good"
+    assert vm.settings[8] == SETTINGS
+    assert any("kept #8 disabled=True" in m for m in logs)
+
+
+def test_a_repaired_active_slot_keeps_its_settings_too(tmp_path, key):
+    store = _published(tmp_path, key)
+    vm = _dead_vm(status="no_credentials", active=8)
+    run_pass(vm, store, key, "vm1", {}, log=quiet)
+    assert vm.activated == [8] and vm.settings[8] == SETTINGS
+
+
+def test_only_settings_the_import_dropped_are_set_again(tmp_path, key):
+    class KeepsAlias(FakeCswap):
+        def import_envelope(self, envelope, force=False):
+            alias = self.settings.get(8, {}).get("alias")
+            out = super().import_envelope(envelope, force)
+            self.settings.setdefault(8, {})["alias"] = alias
+            return out
+
+    store = _published(tmp_path, key)
+    vm = KeepsAlias([login("a@x", ORG_A, "rt-dead", 1000 * H, number=8)],
+                    statuses={8: "relogin_required"}, settings={8: dict(SETTINGS)})
+    run_pass(vm, store, key, "vm1", {}, log=quiet)
+    assert sorted(name for _, name, _ in vm.set_calls) == ["disabled", "threshold"]
+    assert vm.settings[8] == SETTINGS
+
+
+def test_a_slot_without_settings_needs_no_extra_list(tmp_path, key):
+    store = _published(tmp_path, key)
+    vm = FakeCswap([login("a@x", ORG_A, "rt-dead", 1000 * H)], statuses={1: "relogin_required"})
+    run_pass(vm, store, key, "vm1", {}, log=quiet)
+    assert vm.list_calls == 1 and vm.set_calls == []

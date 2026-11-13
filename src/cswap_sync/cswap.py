@@ -60,6 +60,17 @@ class Cswap:
             raise CswapError(f"cswap import failed: {_tail(p.stderr)}")
         return [ln.strip() for ln in p.stderr.splitlines() if ln.strip()]
 
+    def set_setting(self, number: int, name: str, value) -> None:
+        """Re-apply one slot setting with cswap's own command."""
+        args = {
+            "disabled": ("disable", str(number)),
+            "threshold": ("threshold", str(number), f"{float(value):g}"),
+            "alias": ("alias", str(number), str(value)),
+        }[name]
+        p = self._run(*args)
+        if p.returncode != 0:
+            raise CswapError(f"cswap {' '.join(args)} failed: {_tail(p.stderr)}")
+
     def activate(self, number: int) -> None:
         """Rewrite the live login from the slot's stored copy."""
         p = self._run("switch", str(number), "--force")

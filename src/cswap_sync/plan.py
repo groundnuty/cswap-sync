@@ -53,6 +53,16 @@ def expires_at(entry: dict) -> int:
     return int(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else 0
 
 
+#: Per-slot settings that `cswap list --json` reports and `cswap import`
+#: drops when it replaces a slot. (`priority` is not in the JSON, so it can't
+#: be checked.)
+SLOT_SETTINGS = ("disabled", "threshold", "alias")
+
+
+def slot_settings(row: dict) -> dict:
+    return {k: row[k] for k in SLOT_SETTINGS if row.get(k) not in (None, False, "")}
+
+
 def _clean(entry: dict) -> dict:
     return {k: entry[k] for k in ENTRY_FIELDS if k in entry}
 

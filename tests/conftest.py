@@ -30,16 +30,21 @@ def row(entry, status="ok", active=False):
 class FakeCswap:
     """Stands in for the cswap CLI: rows and stored logins in memory."""
 
-    def __init__(self, entries, statuses=None, active=None, api_keys=()):
+    def __init__(self, entries, statuses=None, active=None, api_keys=(), settings=None):
         self.entries = [copy.deepcopy(e) for e in entries]
         self.statuses = dict(statuses or {})
         self.active = active
         self.api_keys = list(api_keys)
+        self.settings = {n: dict(v) for n, v in (settings or {}).items()}
         self.imports = []
         self.activated = []
+        self.set_calls = []
+        self.list_calls = 0
 
     def accounts(self):
-        rows = [row(e, self.statuses.get(e["number"], "ok"), e["number"] == self.active)
+        self.list_calls += 1
+        rows = [dict(row(e, self.statuses.get(e["number"], "ok"), e["number"] == self.active),
+                     **self.settings.get(e["number"], {}))
                 for e in self.entries]
         rows += [{"number": n, "email": "key@token.local", "organizationUuid": "",
                   "active": False, "usageStatus": "api_key"} for n in self.api_keys]
@@ -61,6 +66,7 @@ class FakeCswap:
                     if force or self.statuses.get(e["number"]) == "relogin_required":
                         self.entries[i] = dict(copy.deepcopy(new), number=e["number"])
                         self.statuses[e["number"]] = "ok"
+                        self.settings.pop(e["number"], None)  # as cswap import does
                         lines.append(f"Replaced {new['email']} (slot {e['number']})")
                     else:
                         lines.append(f"Skipped {new['email']} (already exists, use --force)")
@@ -73,6 +79,10 @@ class FakeCswap:
 
     def activate(self, number):
         self.activated.append(number)
+
+    def set_setting(self, number, name, value):
+        self.set_calls.append((number, name, value))
+        self.settings.setdefault(number, {})[name] = value
 
 
 @pytest.fixture

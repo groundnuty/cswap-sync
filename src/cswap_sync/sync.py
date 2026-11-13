@@ -57,6 +57,21 @@ def _prune(tried: dict) -> dict:
     return out
 
 
+def _keep_settings(cswap, number: int | None, before: dict | None,
+                   log: Callable[[str], None]) -> None:
+    """`cswap import` rebuilds a replaced slot's record and drops what the
+    user set on it (a disabled slot rejoins rotation). Put back whatever the
+    import lost, through cswap's own commands."""
+    wanted = P.slot_settings(before or {})
+    if number is None or not wanted:
+        return
+    after = next((r for r in cswap.accounts() if r.get("number") == number), {})
+    for name, value in wanted.items():
+        if after.get(name) != value:
+            cswap.set_setting(number, name, value)
+            log(f"  kept #{number} {name}={value} (cswap import had dropped it)")
+
+
 def run_pass(cswap, store, key: bytes, machine: str, state: dict, *,
              publish: bool = True, apply: bool = True, add_missing: bool = True,
              exclude: list[str] | None = None,
@@ -97,6 +112,7 @@ def run_pass(cswap, store, key: bytes, machine: str, state: dict, *,
     state["tried"] = _prune(state.get("tried", {}))
     result.actions = P.plan(accounts, local_export, copies, add_missing=add_missing,
                             exclude=exclude, tried=state["tried"])
+    rows = {r.get("number"): r for r in accounts}
     for a in result.actions:
         log(("" if apply else "would ") + describe(a))
         if not apply:
@@ -112,6 +128,7 @@ def run_pass(cswap, store, key: bytes, machine: str, state: dict, *,
             if a.kind == "repair-active":
                 cswap.activate(a.number)
                 log(f"  cswap: live login of #{a.number} rewritten from the imported copy")
+            _keep_settings(cswap, a.number, rows.get(a.number), log)
             result.applied.append(describe(a))
         except CswapError as e:
             log(f"  failed: {e}")

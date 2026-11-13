@@ -21,7 +21,8 @@ if args[:2] == ["list", "--json"]:
     rows = [{"number": e["number"], "email": e["email"], "organizationUuid": e["organizationUuid"],
              "organizationName": e.get("organizationName", ""),
              "active": e["number"] == state.get("active"),
-             "usageStatus": state["statuses"].get(str(e["number"]), "ok")} for e in state["entries"]]
+             "usageStatus": state["statuses"].get(str(e["number"]), "ok"),
+             **state.get("settings", {}).get(str(e["number"]), {})} for e in state["entries"]]
     print(json.dumps({"accounts": rows}))
 elif args[:2] == ["export", "-"]:
     if state.get("export_fails") and "--account" not in args:
@@ -40,6 +41,7 @@ elif args[:2] == ["import", "-"]:
                 new["number"] = e["number"]
                 state["entries"][i] = new
                 state["statuses"][str(e["number"])] = "ok"
+                state.get("settings", {}).pop(str(e["number"]), None)  # as cswap import does
                 print(f"Replaced {new['email']} (slot {e['number']} was quarantined)", file=sys.stderr)
                 break
         else:
@@ -49,6 +51,14 @@ elif args[:2] == ["import", "-"]:
     print("Done: 1 imported, 0 overwritten, 0 skipped", file=sys.stderr)
 elif args[:1] == ["switch"]:
     pass
+elif args[:1] in (["disable"], ["threshold"], ["alias"]):
+    slot = state.setdefault("settings", {}).setdefault(args[1], {})
+    if args[0] == "disable":
+        slot["disabled"] = True
+    elif args[0] == "threshold":
+        slot["threshold"] = float(args[2])
+    else:
+        slot["alias"] = args[2]
 else:
     print(f"fake cswap: unsupported {args}", file=sys.stderr)
     save()
