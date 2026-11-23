@@ -104,3 +104,21 @@ def test_a_repaired_disabled_slot_stays_out_of_rotation(machine, capsys):
     assert "cswap: Replaced a@x" in out and "kept #8 disabled=True" in out
     assert vm.state()["settings"]["8"] == {"disabled": True}
     assert ["disable", "8"] in vm.state()["calls"]
+
+
+def test_the_machine_name_is_pinned_on_first_use(machine, monkeypatch, capsys):
+    import cswap_sync.cli as cli
+    vm = machine("vm1", [login("a@x", ORG_A, "rt-1", 1016 * H)])
+    cfg_file = vm.dir / "config.json"
+    cfg = json.loads(cfg_file.read_text())
+    del cfg["machine"]
+    cfg_file.write_text(json.dumps(cfg))
+
+    monkeypatch.setattr(cli.socket, "gethostname", lambda: "laptop-8186.local")
+    assert vm("publish") == 0
+    assert json.loads(cfg_file.read_text())["machine"] == "laptop-8186"
+
+    monkeypatch.setattr(cli.socket, "gethostname", lambda: "laptop-9999.local")
+    assert vm("publish") == 0
+    assert json.loads(cfg_file.read_text())["machine"] == "laptop-8186"
+    assert "laptop-9999" not in capsys.readouterr().err

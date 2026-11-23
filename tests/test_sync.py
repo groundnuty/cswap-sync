@@ -163,3 +163,40 @@ def test_a_slot_without_settings_needs_no_extra_list(tmp_path, key):
     vm = FakeCswap([login("a@x", ORG_A, "rt-dead", 1000 * H)], statuses={1: "relogin_required"})
     run_pass(vm, store, key, "vm1", {}, log=quiet)
     assert vm.list_calls == 1 and vm.set_calls == []
+
+
+def _old(hours):
+    import datetime as dt
+    t = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=hours)
+    return t.isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def test_a_stale_publication_is_never_used(tmp_path, key):
+    store = DirStore(tmp_path)
+    pub = {"format": 1, "machine": "laptop-8186", "publishedAt": _old(30),
+           "accounts": [login("a@x", ORG_A, "rt-old", 1016 * H, number=6)]}
+    store.write("laptop-8186", seal(key, "laptop-8186", json.dumps(pub).encode()))
+    vm = FakeCswap([login("a@x", ORG_A, "rt-dead", 1000 * H)], statuses={1: "relogin_required"})
+    res = run_pass(vm, store, key, "vm1", {}, log=quiet)
+    assert res.actions == [] and vm.imports == []
+    assert any(s.startswith("laptop-8186: stale") for s in res.skipped)
+
+
+def test_a_recent_publication_is_used(tmp_path, key):
+    store = DirStore(tmp_path)
+    pub = {"format": 1, "machine": "laptop", "publishedAt": _old(20),
+           "accounts": [login("a@x", ORG_A, "rt-good", 1016 * H, number=6)]}
+    store.write("laptop", seal(key, "laptop", json.dumps(pub).encode()))
+    vm = FakeCswap([login("a@x", ORG_A, "rt-dead", 1000 * H)], statuses={1: "relogin_required"})
+    assert [a.kind for a in run_pass(vm, store, key, "vm1", {}, log=quiet).actions] == ["repair"]
+
+
+def test_an_unchanged_machine_republishes_every_few_hours(tmp_path, key):
+    store = DirStore(tmp_path)
+    mac = FakeCswap([login("a@x", ORG_A, "rt-1", 1016 * H)])
+    state = {}
+    assert run_pass(mac, store, key, "laptop", state, log=quiet).published
+    state["published_at"] = _old(1)
+    assert not run_pass(mac, store, key, "laptop", state, log=quiet).published
+    state["published_at"] = _old(7)
+    assert run_pass(mac, store, key, "laptop", state, log=quiet).published

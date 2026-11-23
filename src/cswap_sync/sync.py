@@ -14,6 +14,11 @@ from cswap_sync.cswap import CswapError
 from cswap_sync.store import StoreError
 
 TRIED_TTL_DAYS = 30
+# A live machine republishes at least this often, even with nothing changed,
+# so a publication older than STALE_HOURS means the machine is gone or now
+# publishes under another name, and its copies are left alone.
+REPUBLISH_HOURS = 6
+STALE_HOURS = 24
 
 
 def now_iso() -> str:
@@ -45,6 +50,16 @@ class Pass:
     applied: list[str] = field(default_factory=list)
     accounts: list[dict] = field(default_factory=list)
     local_export: dict = field(default_factory=dict)
+
+
+def _hours_since(iso: str | None) -> float | None:
+    try:
+        then = dt.datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if then.tzinfo is None:
+        return None
+    return (dt.datetime.now(dt.timezone.utc) - then).total_seconds() / 3600
 
 
 def _prune(tried: dict) -> dict:
@@ -87,9 +102,11 @@ def run_pass(cswap, store, key: bytes, machine: str, state: dict, *,
         pub = P.publication(machine, accounts, local_export, now_iso())
         result.published_count = len(pub["accounts"])
         d = P.digest(pub)
-        if d != state.get("published"):
+        age = _hours_since(state.get("published_at"))
+        if d != state.get("published") or age is None or age >= REPUBLISH_HOURS:
             store.write(machine, seal(key, machine, json.dumps(pub).encode()))
             state["published"] = d
+            state["published_at"] = pub["publishedAt"]
             result.published = True
             log(f"published {result.published_count} working login(s) to {store}")
 
@@ -105,6 +122,10 @@ def run_pass(cswap, store, key: bytes, machine: str, state: dict, *,
             continue
         if not isinstance(pub, dict) or pub.get("machine") != m:
             result.skipped.append(f"{m}: names another machine")
+            continue
+        age = _hours_since(pub.get("publishedAt"))
+        if age is None or age > STALE_HOURS:
+            result.skipped.append(f"{m}: stale, last published {pub.get('publishedAt', '?')}")
             continue
         result.remotes[m] = P.remote_copies(m, pub)
         copies.extend(result.remotes[m])

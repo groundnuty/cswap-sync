@@ -67,6 +67,22 @@ def _save_state(f: Path, state: dict) -> None:
     os.replace(tmp, f)
 
 
+def _pin_machine(cdir: Path, cfg: dict) -> str:
+    """Name this machine after its short hostname once, and keep that name:
+    macOS renames itself on some networks (orzechpro-8186, ...), and every
+    new name would publish another copy of each login."""
+    name = check_machine(socket.gethostname().split(".")[0])
+    f = cdir / "config.json"
+    if f.exists():
+        cfg = dict(cfg, machine=name)
+        tmp = f.with_suffix(".tmp")
+        tmp.write_text(json.dumps(cfg, indent=1) + "\n")
+        os.replace(tmp, f)
+        print(f"cswap-sync: this machine publishes as {name!r} from now on "
+              f"(\"machine\" in {f})", file=sys.stderr)
+    return name
+
+
 def _settings(args) -> dict:
     cdir = Path(args.config_dir).expanduser()
     cfg = _load_config(cdir)
@@ -74,7 +90,7 @@ def _settings(args) -> dict:
     if not store_spec:
         raise SystemExit("cswap-sync: no store; pass --store or set \"store\" in "
                          f"{cdir / 'config.json'}")
-    machine = check_machine(args.machine or cfg.get("machine") or socket.gethostname().split(".")[0])
+    machine = check_machine(args.machine or cfg.get("machine") or _pin_machine(cdir, cfg))
     token = os.environ.get("CSWAP_SYNC_GITHUB_TOKEN")
     if store_spec.startswith("github:") and not token:
         token = _secret_file(cdir / "github-token", "GitHub token")
