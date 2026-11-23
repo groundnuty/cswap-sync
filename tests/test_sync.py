@@ -110,7 +110,7 @@ def test_unreadable_or_misnamed_blobs_are_skipped(tmp_path, key):
     assert len(res.skipped) == 2 and res.actions == []
 
 
-SETTINGS = {"disabled": True, "threshold": 85.0, "alias": "pk"}
+SETTINGS = {"disabled": True, "threshold": 85.0, "weeklyCap": 80.0, "alias": "pk"}
 
 
 def _dead_vm(**kw):
@@ -154,7 +154,7 @@ def test_only_settings_the_import_dropped_are_set_again(tmp_path, key):
     vm = KeepsAlias([login("a@x", ORG_A, "rt-dead", 1000 * H, number=8)],
                     statuses={8: "relogin_required"}, settings={8: dict(SETTINGS)})
     run_pass(vm, store, key, "vm1", {}, log=quiet)
-    assert sorted(name for _, name, _ in vm.set_calls) == ["disabled", "threshold"]
+    assert sorted(name for _, name, _ in vm.set_calls) == ["disabled", "threshold", "weeklyCap"]
     assert vm.settings[8] == SETTINGS
 
 

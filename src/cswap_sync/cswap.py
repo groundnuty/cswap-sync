@@ -65,6 +65,7 @@ class Cswap:
         args = {
             "disabled": ("disable", str(number)),
             "threshold": ("threshold", str(number), f"{float(value):g}"),
+            "weeklyCap": ("cap", str(number), f"{float(value):g}"),
             "alias": ("alias", str(number), str(value)),
         }[name]
         p = self._run(*args)

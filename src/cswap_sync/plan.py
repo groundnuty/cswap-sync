@@ -55,8 +55,8 @@ def expires_at(entry: dict) -> int:
 
 #: Per-slot settings that `cswap list --json` reports and `cswap import`
 #: drops when it replaces a slot. (`priority` is not in the JSON, so it can't
-#: be checked.)
-SLOT_SETTINGS = ("disabled", "threshold", "alias")
+#: be checked.) `weeklyCap` exists only in the groundnuty fork (`cswap cap`).
+SLOT_SETTINGS = ("disabled", "threshold", "weeklyCap", "alias")
 
 
 def slot_settings(row: dict) -> dict:

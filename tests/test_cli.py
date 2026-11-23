@@ -122,3 +122,14 @@ def test_the_machine_name_is_pinned_on_first_use(machine, monkeypatch, capsys):
     assert vm("publish") == 0
     assert json.loads(cfg_file.read_text())["machine"] == "laptop-8186"
     assert "laptop-9999" not in capsys.readouterr().err
+
+
+def test_a_repaired_capped_slot_keeps_its_cap(machine, capsys):
+    mac = machine("laptop", [login("a@x", ORG_A, "rt-good", 1016 * H, number=6)])
+    vm = machine("vm1", [login("a@x", ORG_A, "rt-dead", 1000 * H, number=8)],
+                 statuses={"8": "relogin_required"}, settings={"8": {"weeklyCap": 80.0}})
+    assert mac("publish") == 0
+    assert vm("run") == 0
+    assert "kept #8 weeklyCap=80.0" in capsys.readouterr().out
+    assert vm.state()["settings"]["8"] == {"weeklyCap": 80.0}
+    assert ["cap", "8", "80"] in vm.state()["calls"]

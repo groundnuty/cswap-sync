@@ -51,12 +51,14 @@ elif args[:2] == ["import", "-"]:
     print("Done: 1 imported, 0 overwritten, 0 skipped", file=sys.stderr)
 elif args[:1] == ["switch"]:
     pass
-elif args[:1] in (["disable"], ["threshold"], ["alias"]):
+elif args[:1] in (["disable"], ["threshold"], ["cap"], ["alias"]):
     slot = state.setdefault("settings", {}).setdefault(args[1], {})
     if args[0] == "disable":
         slot["disabled"] = True
     elif args[0] == "threshold":
         slot["threshold"] = float(args[2])
+    elif args[0] == "cap":
+        slot["weeklyCap"] = float(args[2])
     else:
         slot["alias"] = args[2]
 else:
